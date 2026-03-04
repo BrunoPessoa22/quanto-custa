@@ -16,7 +16,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-CMED_URL = "https://www.gov.br/anvisa/pt-br/assuntos/medicamentos/cmed/precos/arquivos/lista_conformidade.xls"
+CMED_URL = "https://www.gov.br/anvisa/pt-br/assuntos/medicamentos/cmed/precos/arquivos/xls_conformidade_site_20260209_173700756.xlsx/@@download/file"
 
 CATEGORY_MAP = {
     "REFERÊNCIA": "reference",
@@ -34,39 +34,40 @@ CATEGORY_MAP = {
 }
 
 COLUMN_MAP = {
-    "SUBSTÂNCIA": "active_ingredient",
     "SUBSTANCIA": "active_ingredient",
     "PRODUTO": "product_name",
-    "LABORATÓRIO": "manufacturer",
     "LABORATORIO": "manufacturer",
-    "APRESENTAÇÃO": "presentation",
     "APRESENTACAO": "presentation",
     "TIPO DE PRODUTO": "category_raw",
-    "CLASSE TERAPÊUTICA": "therapeutic_class",
     "CLASSE TERAPEUTICA": "therapeutic_class",
     "PF SEM IMPOSTOS": "pf_sem_impostos",
-    "PF 0%": "pf_icms_0",
-    "PMC 0%": "pmc_icms_0",
-    "PMC 12%": "pmc_icms_12",
-    "PMC 17%": "pmc_icms_17",
-    "PMC 17,5%": "pmc_icms_17",
-    "PMC 18%": "pmc_icms_18",
-    "PMC 19%": "pmc_icms_19",
-    "PMC 20%": "pmc_icms_20",
-    "RESTRIÇÃO HOSPITALAR": "hospital_use_only_raw",
+    "PF 0": "pf_icms_0",
+    "PMC 0": "pmc_icms_0",
+    "PMC 12": "pmc_icms_12",
+    "PMC 17 %": "pmc_icms_17",
+    "PMC 17,5": "pmc_icms_17",
+    "PMC 18": "pmc_icms_18",
+    "PMC 19 %": "pmc_icms_19",
+    "PMC 19,5": "pmc_icms_19",
+    "PMC 20 %": "pmc_icms_20",
+    "PMC 20,5": "pmc_icms_20",
     "RESTRICAO HOSPITALAR": "hospital_use_only_raw",
     "TARJA": "restriction",
     "EAN 1": "ean_code",
     "REGISTRO": "anvisa_registry",
-    "LISTA DE CONCESSÃO DE CRÉDITO TRIBUTÁRIO (PIS/COFINS)": "farmacia_popular_raw",
+    "LISTA DE CONCESSAO DE CREDITO TRIBUTARIO": "farmacia_popular_raw",
 }
 
 
 def normalize_col(name: str) -> str:
+    import re
     import unicodedata
     name = unicodedata.normalize("NFKD", name)
     name = "".join(c for c in name if not unicodedata.combining(c))
-    return name.strip().upper()
+    name = name.strip().upper()
+    # Collapse multiple spaces into one
+    name = re.sub(r"\s+", " ", name)
+    return name
 
 
 def parse_cmed_file(file_path: str | Path) -> pd.DataFrame:
@@ -74,16 +75,39 @@ def parse_cmed_file(file_path: str | Path) -> pd.DataFrame:
     if path.suffix in (".xls",):
         df = pd.read_excel(path, engine="xlrd", dtype=str)
     else:
-        df = pd.read_excel(path, engine="openpyxl", dtype=str)
+        # CMED XLSX has ~41 rows of preamble before the actual header
+        df = pd.read_excel(path, engine="openpyxl", dtype=str, header=None)
+        # Find the header row: must have SUBSTÂNCIA/SUBSTANCIA AND many columns
+        header_idx = None
+        for i in range(min(60, len(df))):
+            row_vals = [str(v).strip().upper() for v in df.iloc[i].values if str(v).strip() not in ("", "nan")]
+            if len(row_vals) >= 10 and any("SUBSTANCIA" in v or "SUBSTÂNCIA" in v for v in row_vals):
+                header_idx = i
+                break
+        if header_idx is not None:
+            df.columns = df.iloc[header_idx]
+            df = df.iloc[header_idx + 1:].reset_index(drop=True)
+        else:
+            logger.warning("Could not find header row, trying default")
+
+    # Drop columns with NaN names (from merged cells)
+    df = df.loc[:, df.columns.notna()]
+    # Remove fully empty rows
+    df = df.dropna(how="all").reset_index(drop=True)
 
     rename_map = {}
     for col in df.columns:
         normalized = normalize_col(str(col))
+        # Skip ALC (alíquota) variants — we want the base rate columns
+        if "ALC" in normalized and normalized != "ALC":
+            continue
         for pattern, field in COLUMN_MAP.items():
-            if pattern in normalized:
-                rename_map[col] = field
-                break
+            if normalized.startswith(pattern) or pattern in normalized:
+                if field not in rename_map.values():  # first match wins
+                    rename_map[col] = field
+                    break
 
+    logger.info("Column mapping: %s", {str(k): v for k, v in rename_map.items()})
     df = df.rename(columns=rename_map)
     return df
 
@@ -148,7 +172,7 @@ def _clean_str(val) -> str | None:
     if pd.isna(val) or val is None:
         return None
     s = str(val).strip()
-    return s if s and s.lower() not in ("nan", "none") else None
+    return s if s and s.lower() not in ("nan", "none", "-") else None
 
 
 async def upsert_medications(pool: asyncpg.Pool, records: list[dict]) -> dict:
@@ -277,7 +301,7 @@ async def _insert_equivalent(
 
 
 async def download_cmed(dest_dir: str = "/tmp") -> str:
-    dest = Path(dest_dir) / "cmed_latest.xls"
+    dest = Path(dest_dir) / "cmed_latest.xlsx"
 
     async with httpx.AsyncClient(follow_redirects=True, timeout=120) as client:
         logger.info("Downloading CMED from %s", CMED_URL)

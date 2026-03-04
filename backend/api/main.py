@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api import search, medications, vision, webhooks
+from api import search, medications, vision, webhooks, admin
 from api.deps import init_pool, close_pool
 from config import get_settings
 
@@ -40,6 +40,7 @@ app.add_middleware(
         "http://localhost:5173",
         "https://quantocusta.com.br",
         "https://www.quantocusta.com.br",
+        "https://dashboard-nine-liart-45.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -50,6 +51,7 @@ app.include_router(search.router)
 app.include_router(medications.router)
 app.include_router(vision.router)
 app.include_router(webhooks.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

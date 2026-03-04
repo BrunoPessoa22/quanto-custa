@@ -62,10 +62,10 @@ async def search_medications(
             ) AS similarity_score
         FROM medications m
         WHERE
-            unaccent(lower(m.product_name)) %% unaccent(lower($1))
-            OR unaccent(lower(m.active_ingredient)) %% unaccent(lower($1))
-            OR unaccent(lower(m.product_name)) ILIKE '%%' || unaccent(lower($1)) || '%%'
-            OR unaccent(lower(m.active_ingredient)) ILIKE '%%' || unaccent(lower($1)) || '%%'
+            unaccent(lower(m.product_name)) % unaccent(lower($1))
+            OR unaccent(lower(m.active_ingredient)) % unaccent(lower($1))
+            OR unaccent(lower(m.product_name)) ILIKE '%' || unaccent(lower($1)) || '%'
+            OR unaccent(lower(m.active_ingredient)) ILIKE '%' || unaccent(lower($1)) || '%'
         ORDER BY similarity_score DESC
         LIMIT $2
     """
