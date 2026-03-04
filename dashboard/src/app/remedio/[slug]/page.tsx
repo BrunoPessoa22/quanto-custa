@@ -12,7 +12,7 @@ import {
   Info,
 } from "lucide-react";
 import PriceTable from "@/components/PriceTable";
-import AffiliateLinks from "@/components/AffiliateLinks";
+import PharmacyPrices from "@/components/PharmacyPrices";
 import {
   getMedication,
   getTopMedications,
@@ -331,16 +331,16 @@ export default async function RemedioPage({ params }: PageProps) {
           </div>
         </section>
 
-        {/* Buy Links */}
+        {/* Buy Links with Real Prices */}
         <section className="mt-8">
           <h2 className="text-lg font-bold text-gray-900">
             Onde comprar
           </h2>
           <p className="mt-1 text-sm text-gray-500">
-            Busque {medication.name} nas principais farmacias online.
+            Compare precos reais de {medication.name} nas principais farmacias.
           </p>
           <div className="mt-4">
-            <AffiliateLinks
+            <PharmacyPrices
               medicationId={medication.id}
               medicationName={medication.name}
             />

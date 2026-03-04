@@ -3,7 +3,7 @@ import logging
 import time
 
 import asyncpg
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, BackgroundTasks
 
 from api.deps import get_db
 from services.medication_db import search_medications
@@ -18,6 +18,7 @@ async def search(
     estado: str | None = Query(None, min_length=2, max_length=2, description="Brazilian state (UF)"),
     limit: int = Query(20, ge=1, le=50),
     pool: asyncpg.Pool | None = Depends(get_db),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """Fuzzy medication search with state-based PMC pricing."""
     if not pool:
@@ -31,7 +32,9 @@ async def search(
     for med in raw_results:
         ingredient = (med.get("active_ingredient") or "").strip().lower()
         price = med.get("pmc_price")
-        if ingredient and price and med.get("category") == "reference":
+        # Use reference, new, or similar as the price baseline (branded drugs)
+        cat = med.get("category", "")
+        if ingredient and price and cat in ("reference", "new", "similar", "specific", "biological"):
             if ingredient not in ref_prices or price > ref_prices[ingredient]:
                 ref_prices[ingredient] = price
 
@@ -71,12 +74,64 @@ async def search(
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
 
+    # Warm pharmacy cache for top results in the background
+    if raw_results:
+        top_names = [r.get("product_name", "") for r in raw_results[:3] if r.get("product_name")]
+        for name in top_names:
+            background_tasks.add_task(_warm_pharmacy_cache, pool, name)
+
     return {
         "query": q,
         "state": estado,
         "total": len(medications),
         "medications": medications,
     }
+
+
+async def _warm_pharmacy_cache(pool: asyncpg.Pool | None, query: str) -> None:
+    """Background task: scrape pharmacy prices so they are cached for later."""
+    if not pool:
+        return
+    try:
+        from services.pharmacy_scraper import scrape_all_pharmacies
+        import json
+        from datetime import datetime, timezone
+
+        normalized = query.strip().lower()
+
+        # Skip if already cached (< 24h)
+        existing = await pool.fetchval(
+            """
+            SELECT COUNT(*) FROM pharmacy_prices
+            WHERE search_query = $1
+              AND scraped_at > NOW() - INTERVAL '24 hours'
+            """,
+            normalized,
+        )
+        if existing and existing > 0:
+            return
+
+        scraped = await scrape_all_pharmacies(normalized)
+        now = datetime.now(timezone.utc)
+        for pharmacy_id, products in scraped.items():
+            serialized = json.dumps(
+                [{"name": p.name, "price": p.price, "url": p.url} for p in products],
+                ensure_ascii=False,
+            )
+            await pool.execute(
+                """
+                INSERT INTO pharmacy_prices (search_query, pharmacy, results, scraped_at)
+                VALUES ($1, $2, $3::jsonb, $4)
+                ON CONFLICT (search_query, pharmacy)
+                DO UPDATE SET results = EXCLUDED.results, scraped_at = EXCLUDED.scraped_at
+                """,
+                normalized,
+                pharmacy_id,
+                serialized,
+                now,
+            )
+    except Exception:
+        logger.warning("Background pharmacy cache warm failed for '%s'", query, exc_info=True)
 
 
 def _slugify(text: str) -> str:

@@ -58,6 +58,105 @@ export interface VisionResult {
   }>;
 }
 
+// --- Prescription Analysis (enhanced vision) ---
+
+export interface PrescriptionExtracted {
+  name: string;
+  active_ingredient: string | null;
+  dosage: string | null;
+  form: string | null;
+  quantity: string | null;
+  frequency: string | null;
+  duration: string | null;
+  confidence: number;
+}
+
+export interface PrescriptionItem {
+  extracted: PrescriptionExtracted;
+  best_match: (MedicationWithPrice & { similarity_score?: number }) | null;
+  generic_alternatives: MedicationWithPrice[];
+  cheapest_option: MedicationWithPrice | null;
+  farmacia_popular_option: MedicationWithPrice | null;
+  savings: {
+    reference_price: number | null;
+    cheapest_price: number | null;
+    amount: number | null;
+    percentage: number | null;
+  };
+}
+
+export interface PrescriptionAnalysis {
+  prescription: {
+    type: string;
+    prescriber: string | null;
+    date: string | null;
+  };
+  items: PrescriptionItem[];
+  summary: {
+    total_reference_cost: number;
+    total_cheapest_cost: number;
+    total_savings: number;
+    total_savings_percentage: number;
+    farmacia_popular_count: number;
+    farmacia_popular_free_count: number;
+  };
+  model_used: string;
+  overall_confidence: number;
+  response_time_ms: number;
+  // Legacy fallback fields
+  medications_found?: VisionResult["medications"];
+}
+
+// --- Pharmacy Prices ---
+
+export interface PharmacyProduct {
+  name: string;
+  price: number;
+  url: string;
+}
+
+export interface PharmacyPriceEntry {
+  products: PharmacyProduct[];
+  cheapest: number | null;
+  scraped_at: string | null;
+}
+
+export interface PharmacyPricesResult {
+  query: string;
+  prices: Record<string, PharmacyPriceEntry>;
+  pmc_ceiling: number | null;
+}
+
+// --- Farmacia Popular ---
+
+export interface FarmaciaPopularMedication {
+  id: string;
+  product_name: string;
+  active_ingredient: string;
+  manufacturer: string;
+  presentation: string;
+  category: string;
+  farmacia_popular_free: boolean;
+  pmc_price: number | null;
+}
+
+export interface FarmaciaPopularLocation {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string;
+  state: string;
+  zipcode: string | null;
+  phone: string | null;
+  distance_km: number | null;
+}
+
+export interface FarmaciaPopularStats {
+  total_eligible: number;
+  total_free: number;
+  total_discounted: number;
+}
+
 // --- API Client ---
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
@@ -112,10 +211,12 @@ export async function getMedicationEquivalents(
 }
 
 export async function analyzePrescriptionImage(
-  file: File
-): Promise<VisionResult> {
+  file: File,
+  state?: StateCode
+): Promise<PrescriptionAnalysis> {
   const formData = new FormData();
-  formData.append("image", file);
+  formData.append("file", file);
+  if (state) formData.append("state", state);
 
   const res = await fetch(`${API_BASE}/vision/analyze`, {
     method: "POST",
@@ -149,4 +250,54 @@ export async function getTopMedications(): Promise<
 
 export async function getFarmaciaPopularList(): Promise<MedicationWithPrice[]> {
   return fetchAPI<MedicationWithPrice[]>("/medications/farmacia-popular");
+}
+
+// --- Pharmacy Prices API ---
+
+export async function getPharmacyPrices(
+  query: string,
+  medicationId?: string
+): Promise<PharmacyPricesResult> {
+  const params = new URLSearchParams({ q: query });
+  if (medicationId) params.set("medication_id", medicationId);
+  return fetchAPI<PharmacyPricesResult>(`/pharmacy-prices?${params}`);
+}
+
+// --- Farmacia Popular API ---
+
+export async function getFarmaciaPopularMedications(opts?: {
+  q?: string;
+  free?: boolean;
+  estado?: StateCode;
+  limit?: number;
+  offset?: number;
+}): Promise<{ medications: FarmaciaPopularMedication[]; total: number }> {
+  const params = new URLSearchParams();
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.free !== undefined) params.set("free", String(opts.free));
+  if (opts?.estado) params.set("estado", opts.estado);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  return fetchAPI(`/farmacia-popular/medications?${params}`);
+}
+
+export async function getFarmaciaPopularLocations(opts: {
+  lat: number;
+  lng: number;
+  state?: string;
+  city?: string;
+  limit?: number;
+}): Promise<{ locations: FarmaciaPopularLocation[] }> {
+  const params = new URLSearchParams({
+    lat: String(opts.lat),
+    lng: String(opts.lng),
+  });
+  if (opts.state) params.set("state", opts.state);
+  if (opts.city) params.set("city", opts.city);
+  if (opts.limit) params.set("limit", String(opts.limit));
+  return fetchAPI(`/farmacia-popular/locations?${params}`);
+}
+
+export async function getFarmaciaPopularStats(): Promise<FarmaciaPopularStats> {
+  return fetchAPI<FarmaciaPopularStats>("/farmacia-popular/stats");
 }

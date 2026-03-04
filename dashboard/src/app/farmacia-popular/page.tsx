@@ -2,54 +2,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Heart,
-  Search,
   Check,
   BadgePercent,
   CreditCard,
   FileText,
-  ArrowRight,
   Pill,
   AlertCircle,
+  MapPin,
 } from "lucide-react";
-import { FARMACIA_POPULAR_FREE } from "@/lib/constants";
 import SearchBar from "@/components/SearchBar";
+import FarmaciaPopularSearch from "./FarmaciaPopularSearch";
+import FarmaciaPopularLocator from "@/components/FarmaciaPopularLocator";
 
 export const metadata: Metadata = {
   title: "Farmacia Popular - Medicamentos gratis e com desconto",
   description:
     "Lista completa dos medicamentos gratuitos e com desconto no programa Farmacia Popular do Brasil. Saiba como retirar seus remedios.",
 };
-
-const DISCOUNTED_CATEGORIES = [
-  {
-    name: "Antidepressivos e ansiedade",
-    medications: ["Sertralina", "Citalopram", "Paroxetina"],
-  },
-  {
-    name: "Anticonvulsivantes",
-    medications: ["Carbamazepina", "Fenitoina", "Valproato de Sodio"],
-  },
-  {
-    name: "Antiparkinsonianos",
-    medications: ["Biperideno", "Entacapona", "Pramipexol"],
-  },
-  {
-    name: "Osteoporose",
-    medications: ["Raloxifeno", "Calcitriol"],
-  },
-  {
-    name: "Glaucoma",
-    medications: ["Timolol", "Travoprosta", "Brimonidina"],
-  },
-  {
-    name: "Rinite",
-    medications: ["Budesonida nasal"],
-  },
-  {
-    name: "Incontinencia urinaria",
-    medications: ["Oxibutinina"],
-  },
-];
 
 export default function FarmaciaPopularPage() {
   return (
@@ -118,72 +87,40 @@ export default function FarmaciaPopularPage() {
         </div>
       </section>
 
-      {/* Free medications */}
+      {/* DB-driven medication list */}
       <section className="border-t border-gray-100 bg-gray-50 py-10">
         <div className="mx-auto max-w-4xl px-4">
           <div className="flex items-center gap-2">
-            <Heart className="h-5 w-5 text-teal-600" />
+            <Pill className="h-5 w-5 text-teal-600" />
             <h2 className="text-xl font-bold text-gray-900">
-              Medicamentos 100% gratuitos
+              Medicamentos disponiveis
             </h2>
           </div>
           <p className="mt-2 text-sm text-gray-500">
-            {FARMACIA_POPULAR_FREE.length} medicamentos disponiveis sem nenhum
-            custo para o paciente.
+            Busque medicamentos gratuitos e com desconto no programa Farmacia
+            Popular.
           </p>
-
-          <div className="mt-6 grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-            {FARMACIA_POPULAR_FREE.map((med) => (
-              <Link
-                key={med}
-                href={`/buscar?q=${encodeURIComponent(med)}&fp=1`}
-                className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm hover:shadow-sm"
-              >
-                <Pill className="h-4 w-4 shrink-0 text-teal-600" />
-                <span className="text-gray-900">{med}</span>
-              </Link>
-            ))}
+          <div className="mt-6">
+            <FarmaciaPopularSearch />
           </div>
         </div>
       </section>
 
-      {/* Discounted medications */}
+      {/* Pharmacy locator */}
       <section className="bg-white py-10">
         <div className="mx-auto max-w-4xl px-4">
           <div className="flex items-center gap-2">
-            <BadgePercent className="h-5 w-5 text-teal-600" />
+            <MapPin className="h-5 w-5 text-teal-600" />
             <h2 className="text-xl font-bold text-gray-900">
-              Medicamentos com desconto
+              Encontre uma farmacia credenciada
             </h2>
           </div>
           <p className="mt-2 text-sm text-gray-500">
-            Alem dos medicamentos gratuitos, o programa oferece descontos de ate
-            90% em diversas categorias.
+            Localize a farmacia credenciada pelo Farmacia Popular mais perto de
+            voce.
           </p>
-
-          <div className="mt-6 space-y-4">
-            {DISCOUNTED_CATEGORIES.map((cat) => (
-              <div
-                key={cat.name}
-                className="rounded-lg border border-gray-200 p-4"
-              >
-                <h3 className="text-sm font-semibold text-gray-900">
-                  {cat.name}
-                </h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {cat.medications.map((med) => (
-                    <Link
-                      key={med}
-                      href={`/buscar?q=${encodeURIComponent(med)}`}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-gray-50 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
-                    >
-                      <Pill className="h-3 w-3 text-gray-400" />
-                      {med}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
+          <div className="mt-6">
+            <FarmaciaPopularLocator />
           </div>
         </div>
       </section>

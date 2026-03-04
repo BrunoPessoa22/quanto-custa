@@ -2,14 +2,14 @@
 
 import { useState, useRef, useCallback } from "react";
 import { Camera, Upload, X, Loader2, FileImage } from "lucide-react";
-import { analyzePrescriptionImage, type VisionResult } from "@/lib/api";
-import MedicationCard from "./MedicationCard";
+import { analyzePrescriptionImage, type PrescriptionAnalysis } from "@/lib/api";
+import SavingsReport from "./SavingsReport";
 
 export default function ImageUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<VisionResult | null>(null);
+  const [result, setResult] = useState<PrescriptionAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,33 +56,8 @@ export default function ImageUpload() {
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  if (result && result.medications.length > 0) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Medicamentos encontrados na receita
-          </h3>
-          <button
-            onClick={reset}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            <Camera className="h-4 w-4" />
-            Nova foto
-          </button>
-        </div>
-        {result.medications.map((item, i) => (
-          <div key={i} className="space-y-2">
-            <p className="text-sm font-medium text-gray-700">
-              {item.name} {item.dosage}
-            </p>
-            {item.matches.map((med) => (
-              <MedicationCard key={med.id} medication={med} />
-            ))}
-          </div>
-        ))}
-      </div>
-    );
+  if (result && result.items && result.items.length > 0) {
+    return <SavingsReport analysis={result} onReset={reset} />;
   }
 
   return (
@@ -142,12 +117,27 @@ export default function ImageUpload() {
               {loading && (
                 <div className="mt-3 flex items-center gap-2 text-sm text-teal-600">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Analisando receita...
+                  Analisando receita com IA...
                 </div>
               )}
 
               {error && (
                 <p className="mt-3 text-sm text-red-600">{error}</p>
+              )}
+
+              {result && result.items?.length === 0 && (
+                <div className="mt-3">
+                  <p className="text-sm text-gray-600">
+                    Nenhum medicamento identificado na imagem.
+                  </p>
+                  <button
+                    onClick={reset}
+                    className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-teal-600 hover:text-teal-700"
+                  >
+                    <Camera className="h-4 w-4" />
+                    Tentar outra foto
+                  </button>
+                </div>
               )}
             </div>
             <button

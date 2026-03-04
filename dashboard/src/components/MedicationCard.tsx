@@ -67,12 +67,16 @@ export default function MedicationCard({ medication }: MedicationCardProps) {
             {medication.presentation}
           </p>
 
-          {(medication.farmacia_popular || medication.farmacia_popular_free) && (
+          {medication.farmacia_popular_free && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+              <Heart className="h-3 w-3" />
+              GRATIS no Farmacia Popular
+            </div>
+          )}
+          {medication.farmacia_popular && !medication.farmacia_popular_free && (
             <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700">
               <Heart className="h-3 w-3" />
-              {medication.farmacia_popular_free
-                ? "GRATIS pelo Farmacia Popular"
-                : "Desconto no Farmacia Popular"}
+              Desconto no Farmacia Popular
             </div>
           )}
         </div>

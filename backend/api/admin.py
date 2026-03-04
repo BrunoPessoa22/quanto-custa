@@ -72,6 +72,16 @@ async def run_migration(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_medications_ean_unique ON medications (ean_code) WHERE ean_code IS NOT NULL",
         # Drop the old non-unique index if it exists
         "DROP INDEX IF EXISTS idx_medications_ean",
+        # Pharmacy prices cache table
+        """CREATE TABLE IF NOT EXISTS pharmacy_prices (
+            id BIGSERIAL PRIMARY KEY,
+            search_query TEXT NOT NULL,
+            pharmacy TEXT NOT NULL,
+            results JSONB NOT NULL DEFAULT '[]',
+            scraped_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (search_query, pharmacy)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_pharmacy_prices_query ON pharmacy_prices (search_query)",
     ]
     results = []
     async with pool.acquire() as conn:
@@ -101,3 +111,19 @@ async def refresh_cmed(
 @router.get("/refresh-status")
 async def refresh_status():
     return _refresh_status
+
+
+@router.post("/refresh-farmacia-popular-locations")
+async def refresh_farmacia_popular_locations(
+    pool: asyncpg.Pool | None = Depends(get_db),
+):
+    """Refresh Farmacia Popular pharmacy location data.
+
+    TODO: Fetch from https://infoms.saude.gov.br/ when API is available.
+    """
+    if not pool:
+        return {"error": "Database not available"}
+    return {
+        "status": "endpoint_ready",
+        "message": "Location data source pending configuration",
+    }

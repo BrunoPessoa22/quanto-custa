@@ -166,3 +166,82 @@ async def get_farmacia_popular_drugs(
     """
     rows = await pool.fetch(sql, limit, offset)
     return [dict(r) for r in rows]
+
+
+async def search_farmacia_popular(
+    pool: asyncpg.Pool,
+    query: str | None = None,
+    free_only: bool = False,
+    discounted_only: bool = False,
+    state: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """Search medications eligible for Farmacia Popular.
+
+    Supports optional text search across product_name and active_ingredient,
+    free_only to restrict to 100% free, discounted_only for eligible-but-not-free.
+    """
+    pmc_col = get_pmc_column(state)
+
+    conditions = ["m.farmacia_popular_eligible = TRUE"]
+    params: list = []
+    param_idx = 0
+
+    if free_only:
+        conditions.append("m.farmacia_popular_free = TRUE")
+    elif discounted_only:
+        conditions.append("m.farmacia_popular_free = FALSE")
+
+    if query and query.strip():
+        param_idx += 1
+        conditions.append(
+            f"(unaccent(lower(m.product_name)) ILIKE '%%' || unaccent(lower(${param_idx})) || '%%'"
+            f" OR unaccent(lower(m.active_ingredient)) ILIKE '%%' || unaccent(lower(${param_idx})) || '%%')"
+        )
+        params.append(query.strip())
+
+    param_idx += 1
+    params.append(limit)
+    limit_param = f"${param_idx}"
+
+    param_idx += 1
+    params.append(offset)
+    offset_param = f"${param_idx}"
+
+    where_clause = " AND ".join(conditions)
+
+    sql = f"""
+        SELECT
+            m.id, m.product_name, m.active_ingredient, m.manufacturer,
+            m.presentation, m.category, m.restriction,
+            m.farmacia_popular_eligible, m.farmacia_popular_free,
+            m.{pmc_col} AS pmc_price
+        FROM medications m
+        WHERE {where_clause}
+        ORDER BY m.active_ingredient, m.product_name
+        LIMIT {limit_param} OFFSET {offset_param}
+    """
+
+    rows = await pool.fetch(sql, *params)
+    return [dict(r) for r in rows]
+
+
+async def get_farmacia_popular_stats(pool: asyncpg.Pool) -> dict:
+    """Return aggregate counts for Farmacia Popular medications."""
+    sql = """
+        SELECT
+            COUNT(*) FILTER (WHERE farmacia_popular_eligible = TRUE) AS total_eligible,
+            COUNT(*) FILTER (WHERE farmacia_popular_free = TRUE) AS total_free,
+            COUNT(*) FILTER (
+                WHERE farmacia_popular_eligible = TRUE
+                  AND farmacia_popular_free = FALSE
+            ) AS total_discounted
+        FROM medications
+    """
+    row = await pool.fetchrow(sql)
+    return {
+        "total_eligible": row["total_eligible"],
+        "total_free": row["total_free"],
+        "total_discounted": row["total_discounted"],
+    }

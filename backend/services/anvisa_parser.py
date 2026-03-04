@@ -240,7 +240,12 @@ async def upsert_medications(pool: asyncpg.Pool, records: list[dict]) -> dict:
 
 
 async def build_drug_equivalents(pool: asyncpg.Pool) -> int:
-    """Build drug_equivalents by grouping medications by active_ingredient + presentation."""
+    """Build drug_equivalents by grouping medications by active_ingredient only.
+
+    Matching by (active_ingredient + presentation) produced 0 equivalents because
+    presentations vary slightly across manufacturers. Grouping by active_ingredient
+    alone correctly links references to their generics/similars.
+    """
     rows = await pool.fetch(
         "SELECT id, active_ingredient, presentation, category FROM medications ORDER BY active_ingredient"
     )
@@ -248,13 +253,14 @@ async def build_drug_equivalents(pool: asyncpg.Pool) -> int:
     if not rows:
         return 0
 
-    groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    # Clear existing equivalents so we rebuild from scratch
+    await pool.execute("DELETE FROM drug_equivalents")
+
+    groups: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
-        key = (
-            row["active_ingredient"].strip().lower(),
-            row["presentation"].strip().lower(),
-        )
-        groups[key].append(dict(row))
+        key = row["active_ingredient"].strip().lower()
+        if key:
+            groups[key].append(dict(row))
 
     equivalents_created = 0
 
@@ -265,18 +271,31 @@ async def build_drug_equivalents(pool: asyncpg.Pool) -> int:
         references = [m for m in meds if m["category"] == "reference"]
         generics = [m for m in meds if m["category"] == "generic"]
         similars = [m for m in meds if m["category"] == "similar"]
+        others = [m for m in meds if m["category"] not in ("reference", "generic", "similar")]
 
-        if not references:
+        # Pick a reference anchor: prefer explicit reference, then first "new"
+        # (branded drugs), then first generic as a fallback anchor
+        if references:
+            ref = references[0]
+        elif others:
+            ref = others[0]
+        elif generics:
+            ref = generics[0]
+        else:
             continue
 
-        ref = references[0]
-
+        # Link all generics to the reference anchor
         for gen in generics:
-            await _insert_equivalent(pool, ref["id"], gen["id"], "generic", key[0])
+            if gen["id"] == ref["id"]:
+                continue
+            await _insert_equivalent(pool, ref["id"], gen["id"], "generic", key)
             equivalents_created += 1
 
+        # Link all similars to the reference anchor
         for sim in similars:
-            await _insert_equivalent(pool, ref["id"], sim["id"], "similar_intercambiavel", key[0])
+            if sim["id"] == ref["id"]:
+                continue
+            await _insert_equivalent(pool, ref["id"], sim["id"], "similar_intercambiavel", key)
             equivalents_created += 1
 
     return equivalents_created
