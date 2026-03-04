@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Store, ExternalLink, Loader2, TrendingDown, AlertCircle } from "lucide-react";
 import { getPharmacyPrices, trackAffiliateClick, type PharmacyPricesResult } from "@/lib/api";
-import { PHARMACY_INFO } from "@/lib/constants";
+import { PHARMACY_INFO, buildAffiliateUrl } from "@/lib/constants";
 import AffiliateLinks from "./AffiliateLinks";
 
 interface PharmacyPricesProps {
@@ -112,8 +112,9 @@ export default function PharmacyPrices({
 
           function handleClick(url?: string) {
             trackAffiliateClick(medicationId, pharmacy.id).catch(() => {});
-            const target =
+            const rawUrl =
               url || `${pharmacy.baseUrl}${encodeURIComponent(medicationName)}`;
+            const target = buildAffiliateUrl(rawUrl, pharmacy.awinAdvertiserId);
             window.open(target, "_blank", "noopener,noreferrer");
           }
 

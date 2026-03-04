@@ -36,20 +36,51 @@ export const PHARMACY_INFO = [
     name: "Drogasil",
     color: "#E31937",
     baseUrl: "https://www.drogasil.com.br/search?w=",
+    awinAdvertiserId: process.env.NEXT_PUBLIC_AWIN_DROGASIL_ID || "",
   },
   {
     id: "drogaraia",
     name: "Droga Raia",
     color: "#00A651",
     baseUrl: "https://www.drogaraia.com.br/search?w=",
+    awinAdvertiserId: process.env.NEXT_PUBLIC_AWIN_DROGARAIA_ID || "",
   },
   {
     id: "paguemenos",
     name: "Pague Menos",
     color: "#0066B3",
     baseUrl: "https://www.paguemenos.com.br/busca?q=",
+    awinAdvertiserId: process.env.NEXT_PUBLIC_AWIN_PAGUEMENOS_ID || "64086",
+  },
+  {
+    id: "drogaria_sp",
+    name: "Drogaria Sao Paulo",
+    color: "#D4202C",
+    baseUrl: "https://www.drogariasaopaulo.com.br/search?w=",
+    awinAdvertiserId: process.env.NEXT_PUBLIC_AWIN_DROGARIA_SP_ID || "",
+  },
+  {
+    id: "drogaria_araujo",
+    name: "Drogaria Araujo",
+    color: "#F7941D",
+    baseUrl: "https://www.araujo.com.br/busca?q=",
+    awinAdvertiserId: process.env.NEXT_PUBLIC_AWIN_ARAUJO_ID || "",
   },
 ] as const;
+
+const AWIN_PUBLISHER_ID = process.env.NEXT_PUBLIC_AWIN_PUBLISHER_ID || "";
+
+/**
+ * Wraps a destination URL with Awin tracking if publisher + advertiser IDs are set.
+ * Falls back to the raw URL if Awin is not configured.
+ */
+export function buildAffiliateUrl(
+  destinationUrl: string,
+  awinAdvertiserId: string
+): string {
+  if (!AWIN_PUBLISHER_ID || !awinAdvertiserId) return destinationUrl;
+  return `https://www.awin1.com/cread.php?awinmid=${awinAdvertiserId}&awinaffid=${AWIN_PUBLISHER_ID}&ued=${encodeURIComponent(destinationUrl)}`;
+}
 
 export const ICMS_BRACKETS: Record<string, number> = {
   AC: 19,

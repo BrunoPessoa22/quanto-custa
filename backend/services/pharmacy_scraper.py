@@ -34,6 +34,14 @@ PHARMACIES = {
         "search_url": "https://www.paguemenos.com.br/busca?q={}",
         "name": "Pague Menos",
     },
+    "drogaria_sp": {
+        "search_url": "https://www.drogariasaopaulo.com.br/search?w={}",
+        "name": "Drogaria Sao Paulo",
+    },
+    "drogaria_araujo": {
+        "search_url": "https://www.araujo.com.br/busca?q={}",
+        "name": "Drogaria Araujo",
+    },
 }
 
 HEADERS = {

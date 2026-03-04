@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, Store } from "lucide-react";
-import { PHARMACY_INFO } from "@/lib/constants";
+import { PHARMACY_INFO, buildAffiliateUrl } from "@/lib/constants";
 import { trackAffiliateClick } from "@/lib/api";
 
 interface AffiliateLinksProps {
@@ -21,7 +21,8 @@ export default function AffiliateLinks({
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       {PHARMACY_INFO.map((pharmacy) => {
-        const url = `${pharmacy.baseUrl}${encodeURIComponent(medicationName)}`;
+        const searchUrl = `${pharmacy.baseUrl}${encodeURIComponent(medicationName)}`;
+        const url = buildAffiliateUrl(searchUrl, pharmacy.awinAdvertiserId);
         return (
           <button
             key={pharmacy.id}
