@@ -12,6 +12,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
+@router.get("/suggestions")
+async def suggestions(
+    q: str = Query(..., min_length=2, max_length=200),
+    pool: asyncpg.Pool | None = Depends(get_db),
+):
+    """Fast autocomplete suggestions while typing."""
+    if not pool:
+        return []
+
+    rows = await pool.fetch(
+        """
+        SELECT DISTINCT ON (m.product_name)
+            m.id, m.product_name, m.active_ingredient, m.category
+        FROM medications m
+        WHERE unaccent(lower(m.product_name)) ILIKE '%' || unaccent(lower($1)) || '%'
+           OR unaccent(lower(m.active_ingredient)) ILIKE '%' || unaccent(lower($1)) || '%'
+        ORDER BY m.product_name,
+                 CASE WHEN unaccent(lower(m.product_name)) ILIKE unaccent(lower($1)) || '%' THEN 0 ELSE 1 END
+        LIMIT 8
+        """,
+        q,
+    )
+
+    return [
+        {
+            "name": r["product_name"],
+            "slug": f"{_slugify(r['product_name'])}-{r['id']}",
+            "active_ingredient": r["active_ingredient"],
+            "category": r["category"],
+        }
+        for r in rows
+    ]
+
+
 @router.get("")
 async def search(
     q: str = Query(..., min_length=2, max_length=200, description="Search query"),
