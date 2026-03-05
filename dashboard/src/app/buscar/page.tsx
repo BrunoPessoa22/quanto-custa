@@ -115,7 +115,7 @@ async function SearchResults({
     );
   }
 
-  // Apply sort
+  // Apply sort (default "relevancia" preserves API order = best name match first)
   switch (sort) {
     case "nome":
       medications.sort((a, b) => a.name.localeCompare(b.name));
@@ -126,8 +126,11 @@ async function SearchResults({
       );
       break;
     case "preco":
-    default:
       medications.sort((a, b) => a.price - b.price);
+      break;
+    case "relevancia":
+    default:
+      // Keep API order (sorted by similarity_score DESC)
       break;
   }
 
@@ -173,14 +176,14 @@ export default async function BuscarPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;
   const query = params.q || "";
   const state = (params.estado || "SP") as StateCode;
-  const sort = params.ordenar || "preco";
+  const sort = params.ordenar || "relevancia";
   const categoryFilter = params.tipo || null;
   const fpOnly = params.fp === "1";
 
   const urlParams = new URLSearchParams();
   if (query) urlParams.set("q", query);
   urlParams.set("estado", state);
-  if (sort !== "preco") urlParams.set("ordenar", sort);
+  if (sort !== "relevancia") urlParams.set("ordenar", sort);
   if (categoryFilter) urlParams.set("tipo", categoryFilter);
   if (fpOnly) urlParams.set("fp", "1");
 
@@ -197,14 +200,14 @@ export default async function BuscarPage({ searchParams }: SearchPageProps) {
               <span className="text-xs text-gray-500">Ordenar:</span>
               <div className="flex gap-1.5">
                 <SortButton
-                  label="Preco"
-                  value="preco"
+                  label="Relevancia"
+                  value="relevancia"
                   current={sort}
                   params={urlParams}
                 />
                 <SortButton
-                  label="Nome"
-                  value="nome"
+                  label="Preco"
+                  value="preco"
                   current={sort}
                   params={urlParams}
                 />
