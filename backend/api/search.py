@@ -23,14 +23,21 @@ async def suggestions(
 
     rows = await pool.fetch(
         """
-        SELECT DISTINCT ON (m.product_name)
-            m.id, m.product_name, m.active_ingredient, m.category
-        FROM medications m
-        WHERE unaccent(lower(m.product_name)) ILIKE '%' || unaccent(lower($1)) || '%'
-           OR unaccent(lower(m.active_ingredient)) ILIKE '%' || unaccent(lower($1)) || '%'
-        ORDER BY m.product_name,
-                 CASE WHEN unaccent(lower(m.product_name)) ILIKE unaccent(lower($1)) || '%' THEN 0 ELSE 1 END
-        LIMIT 8
+        WITH matches AS (
+            SELECT DISTINCT ON (lower(m.product_name))
+                m.id, m.product_name, m.active_ingredient, m.category,
+                CASE
+                    WHEN unaccent(lower(m.product_name)) = unaccent(lower($1)) THEN 0
+                    WHEN unaccent(lower(m.product_name)) ILIKE unaccent(lower($1)) || '%' THEN 1
+                    WHEN unaccent(lower(m.product_name)) ILIKE '%' || unaccent(lower($1)) || '%' THEN 2
+                    ELSE 3
+                END AS rank
+            FROM medications m
+            WHERE unaccent(lower(m.product_name)) ILIKE '%' || unaccent(lower($1)) || '%'
+               OR unaccent(lower(m.active_ingredient)) ILIKE unaccent(lower($1)) || '%'
+            ORDER BY lower(m.product_name), m.id
+        )
+        SELECT * FROM matches ORDER BY rank, product_name LIMIT 8
         """,
         q,
     )
