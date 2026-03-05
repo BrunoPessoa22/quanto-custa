@@ -47,26 +47,58 @@ async def search_medications(
     state: str | None = None,
     limit: int = 20,
 ) -> list[dict]:
-    """Fuzzy search medications using pg_trgm similarity."""
+    """Fuzzy search medications using pg_trgm similarity.
+
+    Two-phase search: first find direct matches, then expand to include
+    drugs with the same active ingredient (so searching "rivotril" also
+    returns generic clonazepam alternatives).
+    """
     pmc_col = get_pmc_column(state)
 
     sql = f"""
-        SELECT
-            m.id, m.product_name, m.active_ingredient, m.manufacturer,
-            m.presentation, m.category, m.restriction,
-            m.farmacia_popular_eligible, m.farmacia_popular_free,
-            m.{pmc_col} AS pmc_price,
-            GREATEST(
-                similarity(unaccent(lower(m.product_name)), unaccent(lower($1))),
-                similarity(unaccent(lower(m.active_ingredient)), unaccent(lower($1)))
-            ) AS similarity_score
-        FROM medications m
-        WHERE
-            unaccent(lower(m.product_name)) % unaccent(lower($1))
-            OR unaccent(lower(m.active_ingredient)) % unaccent(lower($1))
-            OR unaccent(lower(m.product_name)) ILIKE '%' || unaccent(lower($1)) || '%'
-            OR unaccent(lower(m.active_ingredient)) ILIKE '%' || unaccent(lower($1)) || '%'
-        ORDER BY similarity_score DESC
+        WITH direct AS (
+            SELECT
+                m.id, m.product_name, m.active_ingredient, m.manufacturer,
+                m.presentation, m.category, m.restriction,
+                m.farmacia_popular_eligible, m.farmacia_popular_free,
+                m.{pmc_col} AS pmc_price,
+                GREATEST(
+                    similarity(unaccent(lower(m.product_name)), unaccent(lower($1))),
+                    similarity(unaccent(lower(m.active_ingredient)), unaccent(lower($1)))
+                ) AS similarity_score,
+                1 AS search_phase
+            FROM medications m
+            WHERE
+                unaccent(lower(m.product_name)) % unaccent(lower($1))
+                OR unaccent(lower(m.active_ingredient)) % unaccent(lower($1))
+                OR unaccent(lower(m.product_name)) ILIKE '%' || unaccent(lower($1)) || '%'
+                OR unaccent(lower(m.active_ingredient)) ILIKE '%' || unaccent(lower($1)) || '%'
+        ),
+        ingredients AS (
+            SELECT DISTINCT lower(trim(active_ingredient)) AS ai
+            FROM direct
+            WHERE similarity_score > 0.15
+            LIMIT 5
+        ),
+        expanded AS (
+            SELECT
+                m.id, m.product_name, m.active_ingredient, m.manufacturer,
+                m.presentation, m.category, m.restriction,
+                m.farmacia_popular_eligible, m.farmacia_popular_free,
+                m.{pmc_col} AS pmc_price,
+                0.10 AS similarity_score,
+                2 AS search_phase
+            FROM medications m
+            WHERE lower(trim(m.active_ingredient)) IN (SELECT ai FROM ingredients)
+              AND m.id NOT IN (SELECT id FROM direct)
+        ),
+        combined AS (
+            SELECT * FROM direct
+            UNION ALL
+            SELECT * FROM expanded
+        )
+        SELECT * FROM combined
+        ORDER BY search_phase, similarity_score DESC, pmc_price ASC NULLS LAST
         LIMIT $2
     """
 
